@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket       = "dev-tf-bucket"
+    bucket       = "chandan-tf-bucket"
     region       = "us-east-1"
     key          = "End-to-End-Kubernetes-DevSecOps-Tetris-Project/Jenkins-Server-TF/terraform.tfstate"
     encrypt      = true
