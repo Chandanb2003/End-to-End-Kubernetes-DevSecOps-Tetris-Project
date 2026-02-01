@@ -42,13 +42,27 @@ pipeline {
             }
         }
         stage('OWASP Dependency-Check Scan') {
-            steps {
-                dir('Tetris-V1') {
-                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                }
+    steps {
+        dir('Tetris-V1') {
+
+            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
+
+                dependencyCheck additionalArguments: """
+                    --scan ./
+                    --nvdApiKey ${NVD_KEY}
+                    --disableYarnAudit
+                    --disableNodeAudit
+                    --format XML
+                    --format HTML
+                """,
+                odcInstallation: 'DP-Check'
             }
+
+            dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
         }
+    }
+}
+
         stage('Trivy File Scan') {
             steps {
                 dir('Tetris-V1') {
