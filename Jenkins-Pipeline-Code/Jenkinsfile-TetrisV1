@@ -1,22 +1,29 @@
 pipeline {
     agent any
+
     tools {
         nodejs 'nodejs'
     }
+
     environment  {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
     }
+
     stages {
+
         stage('Cleaning Workspace') {
             steps {
                 cleanWs()
             }
         }
+
         stage('Checkout from Git') {
             steps {
-                git branch: 'master', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                git branch: 'master', 
+                url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
             }
         }
+
         stage('Sonarqube Analysis') {
             steps {
                 dir('Tetris-V1') {
@@ -27,6 +34,7 @@ pipeline {
                 }
             }
         }
+
         stage('Quality Check') {
             steps {
                 script {
@@ -34,6 +42,7 @@ pipeline {
                 }
             }
         }
+
         stage('Installing Dependencies') {
             steps {
                 dir('Tetris-V1') {
@@ -41,27 +50,23 @@ pipeline {
                 }
             }
         }
+
         stage('OWASP Dependency-Check Scan') {
-    steps {
-        dir('Tetris-V1') {
+            steps {
+                dir('Tetris-V1') {
 
-            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
+                    withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
 
-                dependencyCheck additionalArguments: """
-                    --scan ./
-                    --nvdApiKey ${NVD_KEY}
-                    --disableYarnAudit
-                    --disableNodeAudit
-                    --format XML
-                    --format HTML
-                """,
-                odcInstallation: 'DP-Check'
+                        dependencyCheck(
+                            additionalArguments: "--scan ./ --nvdApiKey ${NVD_KEY} --disableYarnAudit --disableNodeAudit --format XML --format HTML",
+                            odcInstallation: 'DP-Check'
+                        )
+                    }
+
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
             }
-
-            dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
         }
-    }
-}
 
         stage('Trivy File Scan') {
             steps {
@@ -70,6 +75,7 @@ pipeline {
                 }
             }
         }
+
         stage("Docker Image Build") {
             steps {
                 script {
@@ -82,44 +88,58 @@ pipeline {
                 }
             }
         }
+
         stage("Docker Image Pushing") {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh 'docker tag tetrisv1 avian19/tetrisv1:${BUILD_NUMBER}'
-                        sh 'docker push avian19/tetrisv1:${BUILD_NUMBER}'
+                        sh 'docker tag tetrisv1 chandan669/tetrisv1:${BUILD_NUMBER}'
+                        sh 'docker push chandan669/tetrisv1:${BUILD_NUMBER}'
                     }
                 }
             }
         }
+
         stage("TRIVY Image Scan") {
             steps {
-                sh 'trivy image avian19/tetrisv1:${BUILD_NUMBER} > trivyimage.txt'
+                sh 'trivy image chandan669/tetrisv1:${BUILD_NUMBER} > trivyimage.txt'
             }
         }
+
         stage('Checkout Code') {
             steps {
-                git branch: 'master', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                git branch: 'master', 
+                url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
             }
         }
+
         stage('Update Deployment file') {
+
             environment {
                 GIT_REPO_NAME = "End-to-End-Kubernetes-DevSecOps-Tetris-Project"
                 GIT_USER_NAME = "AmanPathak-DevOps"
             }
+
             steps {
                 dir('Manifest-file') {
+
                     withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+
                         sh '''
                             git config user.email "aman07pathak@gmail.com"
                             git config user.name "AmanPathak-DevOps"
+
                             BUILD_NUMBER=${BUILD_NUMBER}
                             echo $BUILD_NUMBER
+
                             imageTag=$(grep -oP '(?<=tetrisv1:)[^ ]+' deployment-service.yml)
                             echo $imageTag
+
                             sed -i "s/tetrisv1:${imageTag}/tetrisv1:${BUILD_NUMBER}/" deployment-service.yml
+
                             git add deployment-service.yml
                             git commit -m "Update deployment Image to version \${BUILD_NUMBER}"
+
                             git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:master
                         '''
                     }
