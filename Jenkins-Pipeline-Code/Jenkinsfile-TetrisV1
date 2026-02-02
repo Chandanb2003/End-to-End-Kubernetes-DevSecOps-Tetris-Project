@@ -9,7 +9,7 @@ pipeline {
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
         // SET THIS TO 'false' TO COMPLETELY SKIP THE OWASP SCAN STAGE
-        RUN_OWASP_SCAN = 'true' 
+        RUN_OWASP_SCAN = 'false' 
     }
 
     stages {
@@ -22,7 +22,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'master', 
-                    url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                    url: 'https://github.com/Chandanb2003/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
             }
         }
 
