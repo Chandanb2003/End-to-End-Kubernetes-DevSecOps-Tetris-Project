@@ -1,12 +1,11 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom';
 import './index.css';
 import Game from './components/Game';
-import { createTetris } from "./tetris/Tetris";
+import {createTetris} from "./tetris/Tetris";
 
 const tetris = createTetris();
 tetris.start();
-
 document.addEventListener("keydown", (event) => {
     const keyName = event.key;
     if (tetris.isRunning()) {
@@ -14,7 +13,8 @@ document.addEventListener("keydown", (event) => {
             tetris.rotateCurrentPiece();
         } else if (keyName === "ArrowDown") {
             tetris.tick();
-        } else if (keyName === "ArrowLeft") {
+        }
+        else if (keyName === "ArrowLeft") {
             tetris.moveLeft();
         } else if (keyName === "ArrowRight") {
             tetris.moveRight();
@@ -22,7 +22,7 @@ document.addEventListener("keydown", (event) => {
             tetris.pause();
         }
     } else {
-        if (keyName === " ") {
+        if(keyName === " ") {
             if (tetris.isPaused()) {
                 tetris.resume();
             } else {
@@ -31,12 +31,9 @@ document.addEventListener("keydown", (event) => {
         }
     }
 });
-
-// React 18 createRoot API
-const container = document.getElementById('root');
-const root = createRoot(container); 
-root.render(
+ReactDOM.render(
     <React.StrictMode>
         <Game tetris={tetris}/>
-    </React.StrictMode>
+    </React.StrictMode>,
+    document.getElementById('root')
 );
