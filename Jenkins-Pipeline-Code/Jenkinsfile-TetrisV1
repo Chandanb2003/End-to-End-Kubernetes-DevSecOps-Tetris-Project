@@ -2,25 +2,27 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'nodejs'
+        // Must match the name in Jenkins Global Tool Configuration
+        nodejs 'nodejs' 
     }
 
-    environment  {
+    environment {
         SCANNER_HOME = tool 'sonar-scanner'
+        // SET THIS TO 'false' TO COMPLETELY SKIP THE OWASP SCAN STAGE
+        RUN_OWASP_SCAN = 'true' 
     }
 
     stages {
-
         stage('Cleaning Workspace') {
             steps {
                 cleanWs()
             }
         }
 
-        stage('Checkout from Git') {
+        stage('Checkout Code') {
             steps {
                 git branch: 'master', 
-                url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                    url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
             }
         }
 
@@ -28,8 +30,9 @@ pipeline {
             steps {
                 dir('Tetris-V1') {
                     withSonarQubeEnv('sonar-scanner') {
-                        sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Tetris \
-                        -Dsonar.projectKey=Tetris '''
+                        sh """${SCANNER_HOME}/bin/sonar-scanner \
+                            -Dsonar.projectName=Tetris \
+                            -Dsonar.projectKey=Tetris"""
                     }
                 }
             }
@@ -43,26 +46,31 @@ pipeline {
             }
         }
 
-        stage('Installing Dependencies') {
+        stage('Upgrading & Installing Dependencies') {
             steps {
                 dir('Tetris-V1') {
-                    sh 'npm install'
+                    // Wipes old vulnerable lock files and installs React 18/Scripts 5
+                    sh '''
+                        rm -rf node_modules package-lock.json
+                        npm install
+                        npm audit fix --force || true
+                    '''
                 }
             }
         }
 
         stage('OWASP Dependency-Check Scan') {
+            when { 
+                environment name: 'RUN_OWASP_SCAN', value: 'true' 
+            }
             steps {
                 dir('Tetris-V1') {
-
                     withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
-
                         dependencyCheck(
                             additionalArguments: "--scan ./ --nvdApiKey ${NVD_KEY} --disableYarnAudit --disableNodeAudit --format XML --format HTML",
                             odcInstallation: 'DP-Check'
                         )
                     }
-
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
@@ -76,70 +84,46 @@ pipeline {
             }
         }
 
-        stage("Docker Image Build") {
+        stage('Docker Image Build & Push') {
             steps {
                 script {
                     dir('Tetris-V1') {
                         withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
                             sh 'docker system prune -f'
-                            sh 'docker build -t tetrisv1 .'
+                            sh "docker build -t tetrisv1 ."
+                            sh "docker tag tetrisv1 chandan669/tetrisv1:${BUILD_NUMBER}"
+                            sh "docker push chandan669/tetrisv1:${BUILD_NUMBER}"
                         }
                     }
                 }
             }
         }
 
-        stage("Docker Image Pushing") {
+        stage('TRIVY Image Scan') {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh 'docker tag tetrisv1 chandan669/tetrisv1:${BUILD_NUMBER}'
-                        sh 'docker push chandan669/tetrisv1:${BUILD_NUMBER}'
-                    }
-                }
+                sh "trivy image chandan669/tetrisv1:${BUILD_NUMBER} > trivyimage.txt"
             }
         }
 
-        stage("TRIVY Image Scan") {
-            steps {
-                sh 'trivy image chandan669/tetrisv1:${BUILD_NUMBER} > trivyimage.txt'
-            }
-        }
-
-        stage('Checkout Code') {
-            steps {
-                git branch: 'master', 
-                url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
-            }
-        }
-
-        stage('Update Deployment file') {
-
+        stage('Update Deployment Manifest') {
             environment {
                 GIT_REPO_NAME = "End-to-End-Kubernetes-DevSecOps-Tetris-Project"
-                GIT_USER_NAME = "AmanPathak-DevOps"
+                GIT_USER_NAME = "Chandanb2003"
             }
-
             steps {
                 dir('Manifest-file') {
-
                     withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-
                         sh '''
-                            git config user.email "aman07pathak@gmail.com"
-                            git config user.name "AmanPathak-DevOps"
+                            git config user.email "cyancolony@gmail.com"
+                            git config user.name "Chandanb2003"
+                            git checkout master
 
-                            BUILD_NUMBER=${BUILD_NUMBER}
-                            echo $BUILD_NUMBER
-
+                            # Extracts old tag and updates it with current BUILD_NUMBER
                             imageTag=$(grep -oP '(?<=tetrisv1:)[^ ]+' deployment-service.yml)
-                            echo $imageTag
-
                             sed -i "s/tetrisv1:${imageTag}/tetrisv1:${BUILD_NUMBER}/" deployment-service.yml
 
                             git add deployment-service.yml
-                            git commit -m "Update deployment Image to version \${BUILD_NUMBER}"
-
+                            git commit -m "Update deployment Image to version ${BUILD_NUMBER}"
                             git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:master
                         '''
                     }
